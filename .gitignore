@@ -1,0 +1,28 @@
+# Quartus Prime 编译生成目录
+db/
+output_files/
+incremental_db/
+simulation/
+greybox_tmp/
+
+# Quartus 临时/日志/报告文件
+*.bak
+*.qmsg
+*.rpt
+*.summary
+*.smsg
+*.done
+*.jdi
+*.pin
+*.sld
+*.sof
+*.sft
+*.sdo
+*.vo
+*.xrf
+*.ppf
+*.qip
+PLLJ_PLLSPE_INFO_M.txt
+
+# 系统锁定文件
+*.flock
