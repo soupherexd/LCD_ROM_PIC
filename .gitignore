@@ -8,6 +8,7 @@ greybox_tmp/
 # Quartus 临时/日志/报告文件
 *.bak
 *.qmsg
+*.qws
 *.rpt
 *.summary
 *.smsg
