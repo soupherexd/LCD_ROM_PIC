@@ -60,13 +60,13 @@ always @(posedge lcd_clk or negedge sys_rst_n) begin
         y_dir <= 1'b0; // 初始向下
     end else begin
         casez ({B3, B2, B1, B0})
-            4'b1000 : begin // B3=1：左上45度移动，边界穿透
+            4'b0100 : begin // B2=1：左上45度移动，边界穿透（原B3功能）
                 if (move_en) begin
                     img_x <= (img_x == 0) ? (H_DISP - 1) : (img_x - 1); // 左移，穿透
                     img_y <= (img_y == 0) ? (V_DISP - 1) : (img_y - 1); // 上移，穿透
                 end
             end
-            4'b0100 : begin // B2=1：向右移动，遇边界反弹
+            4'b0010 : begin // B1=1：向右移动，遇边界反弹（原B2功能）
                 if (move_en) begin
                     if(x_dir == 1'b0) begin // 当前向右
                         if(img_x == (H_DISP - WIDTH)) begin // 到右边界，反弹向左
@@ -87,34 +87,13 @@ always @(posedge lcd_clk or negedge sys_rst_n) begin
                     img_y <= POS_Y_BASE;
                 end
             end
-            4'b0010 : begin // B1=1：向下移动130像素，往复循环
-                if (move_en) begin
-                    if(y_dir == 1'b0) begin // 向下移动
-                        if(img_y >= (POS_Y_BASE + 130)) begin // 移动了130像素，转向上
-                            y_dir <= 1'b1; // 转向上
-                            img_y <= img_y - 1;
-                        end else begin
-                            img_y <= img_y + 1;
-                        end
-                    end else begin // 向上移动
-                        if(img_y <= POS_Y_BASE) begin // 回到起点，转向下
-                            y_dir <= 1'b0; // 转向下
-                            img_y <= img_y + 1;
-                        end else begin
-                            img_y <= img_y - 1;
-                        end
-                    end
-                    // X保持不变
-                    img_x <= POS_X_BASE;
-                end
-            end
             4'b0001 : begin // B0=1：静态显示
                 img_x <= POS_X_BASE;
                 img_y <= POS_Y_BASE;
                 x_dir <= 1'b0; // 重置方向
                 y_dir <= 1'b0;
             end
-            default: begin // 全0或其他情况：静态显示
+            default: begin // 全0或其他情况（含B3）：静态显示
                 img_x <= POS_X_BASE;
                 img_y <= POS_Y_BASE;
                 x_dir <= 1'b0;
@@ -155,6 +134,12 @@ always @(posedge lcd_clk or negedge sys_rst_n) begin
         display_mode <= 1'b0;  // 原图模式
 end
 
+// 运动模式编码（与 casez 优先级一致：B2 > B1 > 其他）
+wire [1:0] motion_mode;
+assign motion_mode = (B2) ? 2'b10 :    // 左上移动
+                     (B1) ? 2'b01 :    // 左右反弹
+                     2'b00;            // 静态显示
+
 wire rom_rd_en;//读ROM使能信号
 reg [14:0] rom_addr;//读ROM地址
 reg rom_valid;//读ROM数据有效信号
@@ -162,12 +147,13 @@ reg rom_valid;//读ROM数据有效信号
 wire [23:0] rom_data;        //ROM输出数据
 wire [23:0] sobel_data;      //Sobel边缘检测输出
 wire [23:0] display_pixel;   //当前有效显示像素
+wire [23:0] pixel_data_mux;  //Sobel/原图 多路选择输出
 
 // ROM输出（原始图像数据）或白色背景
 assign display_pixel = rom_valid ? rom_data : WHITE;
 
 // 根据显示模式选择输出：A1边缘检测 / A0原图
-assign pixel_data = display_mode ? sobel_data : display_pixel;
+assign pixel_data_mux = display_mode ? sobel_data : display_pixel;
 
 //当前像素点坐标位于图案显示区域内，ROM使能信号拉高
 wire in_image_area = (pixel_xpos >= img_x) && (pixel_xpos < img_x + WIDTH)
@@ -247,6 +233,21 @@ lcd_sobel u_lcd_sobel(
     .pixel_ypos     (pixel_ypos),
     .pixel_data_in  (display_pixel),
     .pixel_data_out (sobel_data)
+);
+
+// ============================================================================
+// 文字叠加模块例化
+// 在屏幕右上角显示当前模式文字
+// ============================================================================
+lcd_text_overlay u_lcd_text_overlay(
+    .lcd_clk        (lcd_clk),
+    .sys_rst_n      (sys_rst_n),
+    .motion_mode    (motion_mode),
+    .edge_mode      (display_mode),
+    .pixel_xpos     (pixel_xpos),
+    .pixel_ypos     (pixel_ypos),
+    .pixel_data_in  (pixel_data_mux),
+    .pixel_data_out (pixel_data)
 );
 
 endmodule
