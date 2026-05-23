@@ -7,8 +7,8 @@
 // 文字布局：
 //   第1行 (y=8..55):  运动/拉伸模式 → 静态显示 / 左右移动 / 上下移动 / 对角移动
 //                                       左右拉伸 / 上下拉伸
-//   第2行 (y=62..109): 显示模式 → 原图 / 边缘检测
-//   文字颜色：原图模式=黑色, 边缘检测模式=白色
+//   第2行 (y=62..109): 显示模式 → 原图 / 二值化 / 边缘检测
+//   文字颜色：原图模式=黑色, 二值化/边缘检测模式=白色
 // ============================================================================
 
 module lcd_text_overlay(
@@ -16,7 +16,7 @@ module lcd_text_overlay(
     input               sys_rst_n,
     input      [1:0]    motion_mode,    // 00=静止, 01=左右移动, 10=上下移动, 11=对角移动
     input      [1:0]    stretch_mode,   // 00=无, 01=左右拉伸(B3), 10=上下拉伸(B4)
-    input               edge_mode,      // 0=原图, 1=边缘检测
+    input      [1:0]    display_mode,   // 00=原图, 01=二值化, 10=边缘检测
     input      [10:0]   pixel_xpos,
     input      [10:0]   pixel_ypos,
     input      [23:0]   pixel_data_in,
@@ -35,19 +35,21 @@ localparam CHAR_STEP  = 6'd50;     // 字符步进（含2px间距）
 // ============================================================================
 // 字符索引表（与 font_rom.v 一致）
 // ============================================================================
-//  0:上  1:下  2:伸  3:动  4:原  5:右
-//  6:图  7:对  8:左  9:态 10:拉 11:显
-// 12:检 13:测 14:示 15:移 16:缘 17:角 18:边 19:静
+//  0:上  1:下  2:二  3:伸  4:值  5:动
+//  6:化  7:原  8:右  9:图 10:对 11:左
+// 12:态 13:拉 14:显 15:检 16:测 17:示
+// 18:移 19:缘 20:角 21:边 22:静
 
 // 字符串 → 字符索引数组
-// "静态显示" → [19, 9, 11, 14]  (静,态,显,示)
-// "左右移动" → [8, 5, 15, 3]   (左,右,移,动)
-// "上下移动" → [0, 1, 15, 3]   (上,下,移,动)
-// "对角移动" → [7, 17, 15, 3]  (对,角,移,动)
-// "左右拉伸" → [8, 5, 10, 2]   (左,右,拉,伸)
-// "上下拉伸" → [0, 1, 10, 2]   (上,下,拉,伸)
-// "原图"     → [4, 6]          (原,图)
-// "边缘检测" → [18, 16, 12, 13] (边,缘,检,测)
+// "静态显示" → [22, 12, 14, 17]  (静,态,显,示)
+// "左右移动" → [11, 8, 18, 5]   (左,右,移,动)
+// "上下移动" → [0, 1, 18, 5]    (上,下,移,动)
+// "对角移动" → [10, 20, 18, 5]  (对,角,移,动)
+// "左右拉伸" → [11, 8, 13, 3]   (左,右,拉,伸)
+// "上下拉伸" → [0, 1, 13, 3]    (上,下,拉,伸)
+// "原图"     → [7, 9]           (原,图)
+// "二值化"   → [2, 4, 6]        (二,值,化)
+// "边缘检测" → [21, 19, 15, 16] (边,缘,检,测)
 
 // ============================================================================
 // 当前像素是否在文字区域内
@@ -75,11 +77,11 @@ assign char_col  = local_x % CHAR_STEP;
 assign char_row  = in_text_area_l1 ? local_y_l1[5:0] : local_y_l2[5:0];
 
 // 字符位置有效性：只在字符串实际长度范围内显示
-// 所有模式均为4字（除"原图"=2字）
 wire char_valid;
 assign char_valid = in_text_area_l1 ? (char_idx < 5'd4) :
-                    (in_text_area_l2 && edge_mode) ? (char_idx < 5'd4) :      // "边缘检测" 4字
-                    (in_text_area_l2 && ~edge_mode) ? (char_idx < 5'd2) :     // "原图" 2字
+                    (in_text_area_l2 && (display_mode == 2'b00)) ? (char_idx < 5'd2) :   // "原图" 2字
+                    (in_text_area_l2 && (display_mode == 2'b01)) ? (char_idx < 5'd3) :   // "二值化" 3字
+                    (in_text_area_l2 && (display_mode == 2'b10)) ? (char_idx < 5'd4) :   // "边缘检测" 4字
                     1'b0;
 
 // ============================================================================
@@ -92,37 +94,37 @@ always @(*) begin
         // 第1行：先判断拉伸模式，再判断运动模式
         if (stretch_mode == 2'b01) begin  // 左右拉伸
             case (char_idx)
-                5'd0: char_addr = 5'd8;   // 左
-                5'd1: char_addr = 5'd5;   // 右
-                5'd2: char_addr = 5'd10;  // 拉
-                5'd3: char_addr = 5'd2;   // 伸
+                5'd0: char_addr = 5'd11;  // 左
+                5'd1: char_addr = 5'd8;   // 右
+                5'd2: char_addr = 5'd13;  // 拉
+                5'd3: char_addr = 5'd3;   // 伸
                 default: char_addr = 5'd0;
             endcase
         end else if (stretch_mode == 2'b10) begin  // 上下拉伸
             case (char_idx)
                 5'd0: char_addr = 5'd0;   // 上
                 5'd1: char_addr = 5'd1;   // 下
-                5'd2: char_addr = 5'd10;  // 拉
-                5'd3: char_addr = 5'd2;   // 伸
+                5'd2: char_addr = 5'd13;  // 拉
+                5'd3: char_addr = 5'd3;   // 伸
                 default: char_addr = 5'd0;
             endcase
         end else begin  // 无拉伸，显示运动模式
             case (motion_mode)
-                2'b00: begin  // 静止
+                2'b00: begin  // 静止 → 静态显示
                     case (char_idx)
-                        5'd0: char_addr = 5'd19;  // 静
-                        5'd1: char_addr = 5'd9;   // 态
-                        5'd2: char_addr = 5'd11;  // 显
-                        5'd3: char_addr = 5'd14;  // 示
+                        5'd0: char_addr = 5'd22;  // 静
+                        5'd1: char_addr = 5'd12;  // 态
+                        5'd2: char_addr = 5'd14;  // 显
+                        5'd3: char_addr = 5'd17;  // 示
                         default: char_addr = 5'd0;
                     endcase
                 end
                 2'b01: begin  // 左右移动
                     case (char_idx)
-                        5'd0: char_addr = 5'd8;   // 左
-                        5'd1: char_addr = 5'd5;   // 右
-                        5'd2: char_addr = 5'd15;  // 移
-                        5'd3: char_addr = 5'd3;   // 动
+                        5'd0: char_addr = 5'd11;  // 左
+                        5'd1: char_addr = 5'd8;   // 右
+                        5'd2: char_addr = 5'd18;  // 移
+                        5'd3: char_addr = 5'd5;   // 动
                         default: char_addr = 5'd0;
                     endcase
                 end
@@ -130,17 +132,17 @@ always @(*) begin
                     case (char_idx)
                         5'd0: char_addr = 5'd0;   // 上
                         5'd1: char_addr = 5'd1;   // 下
-                        5'd2: char_addr = 5'd15;  // 移
-                        5'd3: char_addr = 5'd3;   // 动
+                        5'd2: char_addr = 5'd18;  // 移
+                        5'd3: char_addr = 5'd5;   // 动
                         default: char_addr = 5'd0;
                     endcase
                 end
                 2'b11: begin  // 对角移动
                     case (char_idx)
-                        5'd0: char_addr = 5'd7;   // 对
-                        5'd1: char_addr = 5'd17;  // 角
-                        5'd2: char_addr = 5'd15;  // 移
-                        5'd3: char_addr = 5'd3;   // 动
+                        5'd0: char_addr = 5'd10;  // 对
+                        5'd1: char_addr = 5'd20;  // 角
+                        5'd2: char_addr = 5'd18;  // 移
+                        5'd3: char_addr = 5'd5;   // 动
                         default: char_addr = 5'd0;
                     endcase
                 end
@@ -148,22 +150,34 @@ always @(*) begin
             endcase
         end
     end else if (in_text_area_l2) begin
-        // 第2行：显示模式
-        if (edge_mode) begin  // 边缘检测
-            case (char_idx)
-                5'd0: char_addr = 5'd18;  // 边
-                5'd1: char_addr = 5'd16;  // 缘
-                5'd2: char_addr = 5'd12;  // 检
-                5'd3: char_addr = 5'd13;  // 测
-                default: char_addr = 5'd0;
-            endcase
-        end else begin  // 原图
-            case (char_idx)
-                5'd0: char_addr = 5'd4;   // 原
-                5'd1: char_addr = 5'd6;   // 图
-                default: char_addr = 5'd0;
-            endcase
-        end
+        // 第2行：显示模式 00=原图, 01=二值化, 10=边缘检测
+        case (display_mode)
+            2'b00: begin  // 原图
+                case (char_idx)
+                    5'd0: char_addr = 5'd7;   // 原
+                    5'd1: char_addr = 5'd9;   // 图
+                    default: char_addr = 5'd0;
+                endcase
+            end
+            2'b01: begin  // 二值化
+                case (char_idx)
+                    5'd0: char_addr = 5'd2;   // 二
+                    5'd1: char_addr = 5'd4;   // 值
+                    5'd2: char_addr = 5'd6;   // 化
+                    default: char_addr = 5'd0;
+                endcase
+            end
+            2'b10: begin  // 边缘检测
+                case (char_idx)
+                    5'd0: char_addr = 5'd21;  // 边
+                    5'd1: char_addr = 5'd19;  // 缘
+                    5'd2: char_addr = 5'd15;  // 检
+                    5'd3: char_addr = 5'd16;  // 测
+                    default: char_addr = 5'd0;
+                endcase
+            end
+            default: char_addr = 5'd0;
+        endcase
     end else begin
         char_addr = 5'd0;
     end
@@ -205,9 +219,9 @@ end
 // ============================================================================
 wire pixel_on;
 
-// 动态文字颜色：原图=黑色, 边缘检测=白色
+// 动态文字颜色：原图=黑色, 二值化/边缘检测=白色
 wire [23:0] text_color;
-assign text_color = edge_mode ? 24'hFF_FF_FF : 24'h00_00_00;
+assign text_color = (display_mode == 2'b00) ? 24'h00_00_00 : 24'hFF_FF_FF;
 
 // 判断当前像素在字符中的位置是否为前景 (font_pixels 为48bit, 每bit一列)
 // font_pixels[47] = 最左列, font_pixels[0] = 最右列

@@ -91,11 +91,13 @@ set_location_assignment PIN_A15 -to B2
 set_location_assignment PIN_B15 -to B3
 # B4 拉伸按键 — 请根据实际硬件连接修改引脚号
 set_location_assignment PIN_A14 -to B4
-# A0/A1 按键 — 用于切换原图/边缘检测显示
+# A0/A1/A2 按键 — 原图/二值化/边缘检测
 # 请根据实际硬件连接修改引脚号
 set_location_assignment PIN_A20 -to A0
 set_location_assignment PIN_B20 -to A1
+set_location_assignment PIN_A19 -to A2
 set_global_assignment -name VERILOG_FILE lcd_rom_pic.v
+set_global_assignment -name VERILOG_FILE lcd_binary.v
 set_global_assignment -name QIP_FILE lcd_pll.qip
 set_global_assignment -name VERILOG_FILE lcd_driver.v
 set_global_assignment -name VERILOG_FILE lcd_display.v

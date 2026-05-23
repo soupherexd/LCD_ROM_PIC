@@ -7,7 +7,7 @@ from PIL import ImageFont, ImageDraw, Image
 import os
 
 # 需要显示的汉字（去重）
-chars = "静态显示左右移动上下对角原图边缘检测拉伸"
+chars = "静态显示左右移动上下对角原图边缘检测拉伸二值化"
 FONT_SIZE = 48
 CHAR_W = FONT_SIZE
 CHAR_H = FONT_SIZE

@@ -2,8 +2,9 @@ module lcd_display(
     input             lcd_clk,                  //lcd驱动时钟
     input             sys_rst_n,                //复位信号
     input		B0,B1,B2,B3,B4,
-    input             A0,                       // 按键A0：切换原图显示
-    input             A1,                       // 按键A1：切换边缘检测显示
+    input             A0,                       // 按键A0：原图显示
+    input             A1,                       // 按键A1：二值化显示
+    input             A2,                       // 按键A2：边缘检测显示
     input      [10:0] pixel_xpos,               //像素点横坐标
     input      [10:0] pixel_ypos,               //像素点纵坐标    
     output     [23:0] pixel_data                //像素点数据
@@ -108,35 +109,40 @@ always @(posedge lcd_clk or negedge sys_rst_n) begin
     // move_en=0：所有坐标保持不变
 end
 
-// === 显示模式选择 (A0/A1按键切换) ===
-// A0=1 → 原图显示  |  A1=1 → 边缘检测显示  |  默认→原图
-reg display_mode;  // 0=原图, 1=边缘检测
+// === 显示模式选择 (A0/A1/A2按键切换) ===
+// A0=1 → 原图  |  A1=1 → 二值化  |  A2=1 → 边缘检测  |  默认→原图
+reg [1:0] display_mode;  // 00=原图, 01=二值化, 10=边缘检测
 
 // 按键边沿检测
-reg A0_dly, A1_dly;
-wire A0_pos, A1_pos;
+reg A0_dly, A1_dly, A2_dly;
+wire A0_pos, A1_pos, A2_pos;
 
 always @(posedge lcd_clk or negedge sys_rst_n) begin
     if (!sys_rst_n) begin
         A0_dly <= 1'b0;
         A1_dly <= 1'b0;
+        A2_dly <= 1'b0;
     end else begin
         A0_dly <= A0;
         A1_dly <= A1;
+        A2_dly <= A2;
     end
 end
 
 assign A0_pos = A0 & ~A0_dly;  // A0 上升沿
 assign A1_pos = A1 & ~A1_dly;  // A1 上升沿
+assign A2_pos = A2 & ~A2_dly;  // A2 上升沿
 
-// 模式切换：按 A0 显示原图，按 A1 显示边缘检测
+// 模式切换：按 A0 原图，按 A1 二值化，按 A2 边缘检测
 always @(posedge lcd_clk or negedge sys_rst_n) begin
     if (!sys_rst_n)
-        display_mode <= 1'b0;  // 默认原图
+        display_mode <= 2'b00;  // 默认原图
+    else if (A2_pos)
+        display_mode <= 2'b10;  // 边缘检测模式
     else if (A1_pos)
-        display_mode <= 1'b1;  // 边缘检测模式
+        display_mode <= 2'b01;  // 二值化模式
     else if (A0_pos)
-        display_mode <= 1'b0;  // 原图模式
+        display_mode <= 2'b00;  // 原图模式
 end
 
 // 运动模式编码：{B2, B1}
@@ -154,14 +160,17 @@ reg rom_valid;//读ROM数据有效信号
 
 wire [23:0] rom_data;        //ROM输出数据
 wire [23:0] sobel_data;      //Sobel边缘检测输出
+wire [23:0] binary_data;     //二值化输出
 wire [23:0] display_pixel;   //当前有效显示像素
-wire [23:0] pixel_data_mux;  //Sobel/原图 多路选择输出
+wire [23:0] pixel_data_mux;  //Sobel/二值化/原图 多路选择输出
 
 // ROM输出（原始图像数据）或白色背景
 assign display_pixel = rom_valid ? rom_data : WHITE;
 
-// 根据显示模式选择输出：A1边缘检测 / A0原图
-assign pixel_data_mux = display_mode ? sobel_data : display_pixel;
+// 根据显示模式选择输出：A2边缘检测 / A1二值化 / A0原图
+assign pixel_data_mux = (display_mode == 2'b10) ? sobel_data :
+                        (display_mode == 2'b01) ? binary_data :
+                        display_pixel;
 
 //当前像素点坐标位于图案显示区域内，ROM使能信号拉高
 // 拉伸模式下区域扩展到全屏
@@ -248,7 +257,6 @@ pic_rom pic_rom_inst(
 
 // ============================================================================
 // Sobel 边缘检测模块例化
-// 对当前显示像素（原始图像/白色背景）进行实时边缘检测
 // ============================================================================
 lcd_sobel u_lcd_sobel(
     .lcd_clk        (lcd_clk),
@@ -260,6 +268,16 @@ lcd_sobel u_lcd_sobel(
 );
 
 // ============================================================================
+// 二值化模块例化
+// ============================================================================
+lcd_binary u_lcd_binary(
+    .lcd_clk        (lcd_clk),
+    .sys_rst_n      (sys_rst_n),
+    .pixel_data_in  (display_pixel),
+    .pixel_data_out (binary_data)
+);
+
+// ============================================================================
 // 文字叠加模块例化
 // 在屏幕右上角显示当前模式文字
 // ============================================================================
@@ -268,7 +286,7 @@ lcd_text_overlay u_lcd_text_overlay(
     .sys_rst_n      (sys_rst_n),
     .motion_mode    (motion_mode),
     .stretch_mode   (stretch_mode),
-    .edge_mode      (display_mode),
+    .display_mode   (display_mode),
     .pixel_xpos     (pixel_xpos),
     .pixel_ypos     (pixel_ypos),
     .pixel_data_in  (pixel_data_mux),
