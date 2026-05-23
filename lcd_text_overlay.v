@@ -5,7 +5,7 @@
 //       使用 48x48 点阵汉字字模（微软雅黑）
 //
 // 文字布局：
-//   第1行 (y=8..55):  运动模式 → 静态显示 / 左右反弹 / 左上移动
+//   第1行 (y=8..55):  运动模式 → 静态显示 / 左右移动 / 上下移动 / 对角移动
 //   第2行 (y=62..109): 显示模式 → 原图 / 边缘检测
 //   文字颜色：原图模式=黑色, 边缘检测模式=白色
 // ============================================================================
@@ -33,16 +33,17 @@ localparam CHAR_STEP  = 6'd50;     // 字符步进（含2px间距）
 // ============================================================================
 // 字符索引表（与 font_rom.v 一致）
 // ============================================================================
-//  0:上  1:动  2:原  3:反  4:右  5:图
-//  6:左  7:弹  8:态  9:显 10:检 11:测
-// 12:示 13:移 14:缘 15:边 16:静
+//  0:上  1:下  2:动  3:原  4:右  5:图
+//  6:对  7:左  8:态  9:显 10:检 11:测
+// 12:示 13:移 14:缘 15:角 16:边 17:静
 
 // 字符串 → 字符索引数组
-// "静态显示" → [16, 8, 9, 12]  (静,态,显,示)
-// "左右反弹" → [6, 4, 3, 7]   (左,右,反,弹)
-// "左上移动" → [6, 0, 13, 1]   (左,上,移,动)
-// "原图"     → [2, 5]          (原,图)
-// "边缘检测" → [15, 14, 10, 11] (边,缘,检,测)
+// "静态显示" → [17, 8, 9, 12]  (静,态,显,示)
+// "左右移动" → [7, 4, 13, 2]   (左,右,移,动)
+// "上下移动" → [0, 1, 13, 2]   (上,下,移,动)
+// "对角移动" → [6, 15, 13, 2]  (对,角,移,动)
+// "原图"     → [3, 5]          (原,图)
+// "边缘检测" → [16, 14, 10, 11] (边,缘,检,测)
 
 // ============================================================================
 // 当前像素是否在文字区域内
@@ -70,7 +71,7 @@ assign char_col  = local_x % CHAR_STEP;
 assign char_row  = in_text_area_l1 ? local_y_l1[5:0] : local_y_l2[5:0];
 
 // 字符位置有效性：只在字符串实际长度范围内显示
-// "静态显示/左右反弹/左上移动/边缘检测" = 4字, "原图" = 2字
+// "静态显示/左右移动/上下移动/对角移动/边缘检测" = 4字, "原图" = 2字
 wire char_valid;
 assign char_valid = in_text_area_l1 ? (char_idx < 5'd4) :
                     (in_text_area_l2 && edge_mode) ? (char_idx < 5'd4) :      // "边缘检测" 4字
@@ -86,30 +87,39 @@ always @(*) begin
     if (in_text_area_l1) begin
         // 第1行：运动模式
         case (motion_mode)
-            2'b00: begin  // 静态
+            2'b00: begin  // 静止
                 case (char_idx)
-                    5'd0: char_addr = 5'd16;  // 静
+                    5'd0: char_addr = 5'd17;  // 静
                     5'd1: char_addr = 5'd8;   // 态
                     5'd2: char_addr = 5'd9;   // 显
                     5'd3: char_addr = 5'd12;  // 示
                     default: char_addr = 5'd0;
                 endcase
             end
-            2'b01: begin  // 左右反弹
+            2'b01: begin  // 左右移动
                 case (char_idx)
-                    5'd0: char_addr = 5'd6;   // 左
+                    5'd0: char_addr = 5'd7;   // 左
                     5'd1: char_addr = 5'd4;   // 右
-                    5'd2: char_addr = 5'd3;   // 反
-                    5'd3: char_addr = 5'd7;   // 弹
+                    5'd2: char_addr = 5'd13;  // 移
+                    5'd3: char_addr = 5'd2;   // 动
                     default: char_addr = 5'd0;
                 endcase
             end
-            2'b10: begin  // 左上移动
+            2'b10: begin  // 上下移动
                 case (char_idx)
-                    5'd0: char_addr = 5'd6;   // 左
-                    5'd1: char_addr = 5'd0;   // 上
+                    5'd0: char_addr = 5'd0;   // 上
+                    5'd1: char_addr = 5'd1;   // 下
                     5'd2: char_addr = 5'd13;  // 移
-                    5'd3: char_addr = 5'd1;   // 动
+                    5'd3: char_addr = 5'd2;   // 动
+                    default: char_addr = 5'd0;
+                endcase
+            end
+            2'b11: begin  // 对角移动
+                case (char_idx)
+                    5'd0: char_addr = 5'd6;   // 对
+                    5'd1: char_addr = 5'd15;  // 角
+                    5'd2: char_addr = 5'd13;  // 移
+                    5'd3: char_addr = 5'd2;   // 动
                     default: char_addr = 5'd0;
                 endcase
             end
@@ -119,7 +129,7 @@ always @(*) begin
         // 第2行：显示模式
         if (edge_mode) begin  // 边缘检测
             case (char_idx)
-                5'd0: char_addr = 5'd15;  // 边
+                5'd0: char_addr = 5'd16;  // 边
                 5'd1: char_addr = 5'd14;  // 缘
                 5'd2: char_addr = 5'd10;  // 检
                 5'd3: char_addr = 5'd11;  // 测
@@ -127,7 +137,7 @@ always @(*) begin
             endcase
         end else begin  // 原图
             case (char_idx)
-                5'd0: char_addr = 5'd2;   // 原
+                5'd0: char_addr = 5'd3;   // 原
                 5'd1: char_addr = 5'd5;   // 图
                 default: char_addr = 5'd0;
             endcase

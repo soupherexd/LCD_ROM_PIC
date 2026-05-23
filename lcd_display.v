@@ -58,49 +58,54 @@ always @(posedge lcd_clk or negedge sys_rst_n) begin
         img_y <= POS_Y_BASE;
         x_dir <= 1'b0; // 初始向右
         y_dir <= 1'b0; // 初始向下
-    end else begin
-        casez ({B3, B2, B1, B0})
-            4'b0100 : begin // B2=1：左上45度移动，边界穿透（原B3功能）
-                if (move_en) begin
-                    img_x <= (img_x == 0) ? (H_DISP - 1) : (img_x - 1); // 左移，穿透
-                    img_y <= (img_y == 0) ? (V_DISP - 1) : (img_y - 1); // 上移，穿透
+    end else if (B0) begin
+        // B0=1：重置为初始坐标
+        img_x <= POS_X_BASE;
+        img_y <= POS_Y_BASE;
+        x_dir <= 1'b0;
+        y_dir <= 1'b0;
+    end else if (move_en) begin
+        // B1 控制水平左右移动，遇边界反弹
+        if (B1) begin
+            if(x_dir == 1'b0) begin // 当前向右
+                if(img_x >= (H_DISP - WIDTH)) begin // 到右边界，反弹向左
+                    x_dir <= 1'b1;
+                    img_x <= img_x - 1;
+                end else begin
+                    img_x <= img_x + 1;
+                end
+            end else begin // 当前向左
+                if(img_x == 0) begin // 到左边界，反弹向右
+                    x_dir <= 1'b0;
+                    img_x <= img_x + 1;
+                end else begin
+                    img_x <= img_x - 1;
                 end
             end
-            4'b0010 : begin // B1=1：向右移动，遇边界反弹（原B2功能）
-                if (move_en) begin
-                    if(x_dir == 1'b0) begin // 当前向右
-                        if(img_x == (H_DISP - WIDTH)) begin // 到右边界，反弹向左
-                            x_dir <= 1'b1;
-                            img_x <= img_x - 1;
-                        end else begin
-                            img_x <= img_x + 1;
-                        end
-                    end else begin // 当前向左
-                        if(img_x == 0) begin // 到左边界，反弹向右
-                            x_dir <= 1'b0;
-                            img_x <= img_x + 1;
-                        end else begin
-                            img_x <= img_x - 1;
-                        end
-                    end
-                    // Y保持不变
-                    img_y <= POS_Y_BASE;
+        end
+        // B1=0：X坐标保持不动
+
+        // B2 控制垂直上下移动，遇边界反弹
+        if (B2) begin
+            if(y_dir == 1'b0) begin // 当前向下
+                if(img_y >= (V_DISP - HEIGHT)) begin // 到下边界，反弹向上
+                    y_dir <= 1'b1;
+                    img_y <= img_y - 1;
+                end else begin
+                    img_y <= img_y + 1;
+                end
+            end else begin // 当前向上
+                if(img_y == 0) begin // 到上边界，反弹向下
+                    y_dir <= 1'b0;
+                    img_y <= img_y + 1;
+                end else begin
+                    img_y <= img_y - 1;
                 end
             end
-            4'b0001 : begin // B0=1：静态显示
-                img_x <= POS_X_BASE;
-                img_y <= POS_Y_BASE;
-                x_dir <= 1'b0; // 重置方向
-                y_dir <= 1'b0;
-            end
-            default: begin // 全0或其他情况（含B3）：静态显示
-                img_x <= POS_X_BASE;
-                img_y <= POS_Y_BASE;
-                x_dir <= 1'b0;
-                y_dir <= 1'b0;
-            end
-        endcase
+        end
+        // B2=0：Y坐标保持不动
     end
+    // move_en=0：所有坐标保持不变
 end
 
 // === 显示模式选择 (A0/A1按键切换) ===
@@ -134,11 +139,10 @@ always @(posedge lcd_clk or negedge sys_rst_n) begin
         display_mode <= 1'b0;  // 原图模式
 end
 
-// 运动模式编码（与 casez 优先级一致：B2 > B1 > 其他）
+// 运动模式编码：{B2, B1}
+// 00=静止, 01=左右移动, 10=上下移动, 11=对角移动
 wire [1:0] motion_mode;
-assign motion_mode = (B2) ? 2'b10 :    // 左上移动
-                     (B1) ? 2'b01 :    // 左右反弹
-                     2'b00;            // 静态显示
+assign motion_mode = {B2, B1};
 
 wire rom_rd_en;//读ROM使能信号
 reg [14:0] rom_addr;//读ROM地址
