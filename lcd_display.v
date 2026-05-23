@@ -2,6 +2,8 @@ module lcd_display(
     input             lcd_clk,                  //lcd驱动时钟
     input             sys_rst_n,                //复位信号
     input		B0,B1,B2,B3,
+    input             A0,                       // 按键A0：切换原图显示
+    input             A1,                       // 按键A1：切换边缘检测显示
     input      [10:0] pixel_xpos,               //像素点横坐标
     input      [10:0] pixel_ypos,               //像素点纵坐标    
     output     [23:0] pixel_data                //像素点数据
@@ -10,10 +12,10 @@ module lcd_display(
 parameter H_DISP = 11'd800;//分辨率一行
 parameter V_DISP = 11'd480;//分辨率一列
 
-// 图像参数 - 按要求修改为140*170
-localparam WIDTH  = 10'd140;
-localparam HEIGHT = 10'd170;
-localparam TOTAL  = 15'd23800; // 140*170
+// 图像参数 - 160*160
+localparam WIDTH  = 10'd160;
+localparam HEIGHT = 10'd160;
+localparam TOTAL  = 15'd25600; // 160*160
 localparam YELLOW = 24'b11111111_11111111_00000000; // 黄色
 localparam RED    = 24'b11111111_00000000_00000000; // 红色
 localparam WHITE  = 24'b11111111_11111111_11111111; // 白色
@@ -122,13 +124,50 @@ always @(posedge lcd_clk or negedge sys_rst_n) begin
     end
 end
 
+// === 显示模式选择 (A0/A1按键切换) ===
+// A0=1 → 原图显示  |  A1=1 → 边缘检测显示  |  默认→原图
+reg display_mode;  // 0=原图, 1=边缘检测
+
+// 按键边沿检测
+reg A0_dly, A1_dly;
+wire A0_pos, A1_pos;
+
+always @(posedge lcd_clk or negedge sys_rst_n) begin
+    if (!sys_rst_n) begin
+        A0_dly <= 1'b0;
+        A1_dly <= 1'b0;
+    end else begin
+        A0_dly <= A0;
+        A1_dly <= A1;
+    end
+end
+
+assign A0_pos = A0 & ~A0_dly;  // A0 上升沿
+assign A1_pos = A1 & ~A1_dly;  // A1 上升沿
+
+// 模式切换：按 A0 显示原图，按 A1 显示边缘检测
+always @(posedge lcd_clk or negedge sys_rst_n) begin
+    if (!sys_rst_n)
+        display_mode <= 1'b0;  // 默认原图
+    else if (A1_pos)
+        display_mode <= 1'b1;  // 边缘检测模式
+    else if (A0_pos)
+        display_mode <= 1'b0;  // 原图模式
+end
+
 wire rom_rd_en;//读ROM使能信号
 reg [14:0] rom_addr;//读ROM地址
 reg rom_valid;//读ROM数据有效信号
 
-wire [23:0] rom_data;//ROM输出数据
-//从ROM中读出的图像数据有效时，将其输出显示
-assign pixel_data = rom_valid ? rom_data : WHITE;
+wire [23:0] rom_data;        //ROM输出数据
+wire [23:0] sobel_data;      //Sobel边缘检测输出
+wire [23:0] display_pixel;   //当前有效显示像素
+
+// ROM输出（原始图像数据）或白色背景
+assign display_pixel = rom_valid ? rom_data : WHITE;
+
+// 根据显示模式选择输出：A1边缘检测 / A0原图
+assign pixel_data = display_mode ? sobel_data : display_pixel;
 
 //当前像素点坐标位于图案显示区域内，ROM使能信号拉高
 wire in_image_area = (pixel_xpos >= img_x) && (pixel_xpos < img_x + WIDTH)
@@ -196,4 +235,18 @@ pic_rom pic_rom_inst(
     .q (rom_data)
 
 );
+
+// ============================================================================
+// Sobel 边缘检测模块例化
+// 对当前显示像素（原始图像/白色背景）进行实时边缘检测
+// ============================================================================
+lcd_sobel u_lcd_sobel(
+    .lcd_clk        (lcd_clk),
+    .sys_rst_n      (sys_rst_n),
+    .pixel_xpos     (pixel_xpos),
+    .pixel_ypos     (pixel_ypos),
+    .pixel_data_in  (display_pixel),
+    .pixel_data_out (sobel_data)
+);
+
 endmodule
