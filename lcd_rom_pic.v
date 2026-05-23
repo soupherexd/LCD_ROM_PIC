@@ -5,6 +5,7 @@ module lcd_rom_pic(
     input           B1,             // 运动控制开关B1
     input           B2,             // 运动控制开关B2
     input           B3,             // 运动控制开关B3
+    input           B4,             // 运动控制开关B4（左右拉伸）
     input           A0,             // 按键A0：原图显示
     input           A1,             // 按键A1：边缘检测显示
     output          lcd_hs,         
@@ -54,6 +55,7 @@ lcd_display u_lcd_display(          //lcd显示模块
     .B1             (B1),           // 连接控制开关B1
     .B2             (B2),           // 连接控制开关B2
     .B3             (B3),           // 连接控制开关B3
+    .B4             (B4),           // 连接控制开关B4
     .A0             (A0),           // 按键A0：原图
     .A1             (A1),           // 按键A1：边缘检测
     .pixel_xpos     (pixel_xpos_w),

@@ -1,7 +1,7 @@
 module lcd_display(
     input             lcd_clk,                  //lcd驱动时钟
     input             sys_rst_n,                //复位信号
-    input		B0,B1,B2,B3,
+    input		B0,B1,B2,B3,B4,
     input             A0,                       // 按键A0：切换原图显示
     input             A1,                       // 按键A1：切换边缘检测显示
     input      [10:0] pixel_xpos,               //像素点横坐标
@@ -65,8 +65,8 @@ always @(posedge lcd_clk or negedge sys_rst_n) begin
         x_dir <= 1'b0;
         y_dir <= 1'b0;
     end else if (move_en) begin
-        // B1 控制水平左右移动，遇边界反弹
-        if (B1) begin
+        // B1 控制水平左右移动，遇边界反弹（B3=1 时禁用水平移动）
+        if (B1 && ~B3) begin
             if(x_dir == 1'b0) begin // 当前向右
                 if(img_x >= (H_DISP - WIDTH)) begin // 到右边界，反弹向左
                     x_dir <= 1'b1;
@@ -83,10 +83,10 @@ always @(posedge lcd_clk or negedge sys_rst_n) begin
                 end
             end
         end
-        // B1=0：X坐标保持不动
+        // B1=0 或 B3=1：X坐标保持不动
 
-        // B2 控制垂直上下移动，遇边界反弹
-        if (B2) begin
+        // B2 控制垂直上下移动，遇边界反弹（B4=1 时禁用垂直移动）
+        if (B2 && ~B4) begin
             if(y_dir == 1'b0) begin // 当前向下
                 if(img_y >= (V_DISP - HEIGHT)) begin // 到下边界，反弹向上
                     y_dir <= 1'b1;
@@ -103,7 +103,7 @@ always @(posedge lcd_clk or negedge sys_rst_n) begin
                 end
             end
         end
-        // B2=0：Y坐标保持不动
+        // B2=0 或 B4=1：Y坐标保持不动
     end
     // move_en=0：所有坐标保持不变
 end
@@ -144,6 +144,10 @@ end
 wire [1:0] motion_mode;
 assign motion_mode = {B2, B1};
 
+// 拉伸模式：00=无, 01=左右拉伸(B3), 10=上下拉伸(B4)
+wire [1:0] stretch_mode;
+assign stretch_mode = {B4, B3};
+
 wire rom_rd_en;//读ROM使能信号
 reg [14:0] rom_addr;//读ROM地址
 reg rom_valid;//读ROM数据有效信号
@@ -160,8 +164,9 @@ assign display_pixel = rom_valid ? rom_data : WHITE;
 assign pixel_data_mux = display_mode ? sobel_data : display_pixel;
 
 //当前像素点坐标位于图案显示区域内，ROM使能信号拉高
-wire in_image_area = (pixel_xpos >= img_x) && (pixel_xpos < img_x + WIDTH)
-                   && (pixel_ypos >= img_y) && (pixel_ypos < img_y + HEIGHT);
+// 拉伸模式下区域扩展到全屏
+wire in_image_area = (B3 ? (pixel_xpos < H_DISP) : ((pixel_xpos >= img_x) && (pixel_xpos < img_x + WIDTH)))
+                   && (B4 ? (pixel_ypos < V_DISP) : ((pixel_ypos >= img_y) && (pixel_ypos < img_y + HEIGHT)));
 
 // 存储上一行的图像位置，用于检测图像位置是否发生变化
 reg [10:0] prev_img_x, prev_img_y;
@@ -193,7 +198,22 @@ always @(posedge lcd_clk or negedge sys_rst_n) begin
         // 在图像区域内时，计算相对于图像左上角的地址
         // 地址 = (当前y - 图像y) * WIDTH + (当前x - 图像x)
         reg [14:0] current_addr;
-        current_addr = (pixel_ypos - img_y) * WIDTH + (pixel_xpos - img_x);
+        reg [14:0] rom_x, rom_y;
+        
+        // 拉伸模式下对坐标进行缩放映射
+        // B3=1(左右拉伸): X = pixel_xpos * WIDTH / H_DISP = pixel_xpos / 5
+        // B4=1(上下拉伸): Y = pixel_ypos * HEIGHT / V_DISP = pixel_ypos / 3
+        if (B3)
+            rom_x = pixel_xpos / 5;  // 160/800 = 1/5
+        else
+            rom_x = pixel_xpos - img_x;
+            
+        if (B4)
+            rom_y = pixel_ypos / 3;  // 160/480 = 1/3
+        else
+            rom_y = pixel_ypos - img_y;
+            
+        current_addr = rom_y * WIDTH + rom_x;
         
         // 如果当前地址与rom_addr不一致（比如刚进入图像区域），则更新
         if(rom_addr != current_addr) begin
@@ -247,6 +267,7 @@ lcd_text_overlay u_lcd_text_overlay(
     .lcd_clk        (lcd_clk),
     .sys_rst_n      (sys_rst_n),
     .motion_mode    (motion_mode),
+    .stretch_mode   (stretch_mode),
     .edge_mode      (display_mode),
     .pixel_xpos     (pixel_xpos),
     .pixel_ypos     (pixel_ypos),

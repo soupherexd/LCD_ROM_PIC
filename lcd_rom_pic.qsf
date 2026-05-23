@@ -89,6 +89,8 @@ set_location_assignment PIN_A16 -to B0
 set_location_assignment PIN_B16 -to B1
 set_location_assignment PIN_A15 -to B2
 set_location_assignment PIN_B15 -to B3
+# B4 拉伸按键 — 请根据实际硬件连接修改引脚号
+set_location_assignment PIN_A14 -to B4
 # A0/A1 按键 — 用于切换原图/边缘检测显示
 # 请根据实际硬件连接修改引脚号
 set_location_assignment PIN_A20 -to A0
