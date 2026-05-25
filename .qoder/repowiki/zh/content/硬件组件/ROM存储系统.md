@@ -5,8 +5,6 @@
 - [lcd_rom_pic.v](file://lcd_rom_pic.v)
 - [pic_rom.v](file://pic_rom.v)
 - [CrazyBird.mif](file://CrazyBird.mif)
-- [miqi.mif](file://miqi.mif)
-- [picture1.mif](file://picture1.mif)
 - [lcd_display.v](file://lcd_display.v)
 - [lcd_driver.v](file://lcd_driver.v)
 - [lcd_pll.v](file://lcd_pll.v)
@@ -16,6 +14,13 @@
 - [lcd_rom_pic.txt](file://lcd_rom_pic.txt)
 - [lcd_display.txt](file://lcd_display.txt)
 </cite>
+
+## 更新摘要
+**所做更改**
+- 更新了ROM存储系统配置，移除了对miqi.mif、miqi1.mif、picture1.mif文件的依赖
+- 修订了存储器规格参数，反映了实际使用的CrazyBird.mif文件
+- 更新了文件组织结构，仅保留CrazyBird.mif作为唯一ROM初始化文件
+- 修改了地址计算和数据布局说明，符合新的存储配置
 
 ## 目录
 1. [引言](#引言)
@@ -32,6 +37,8 @@
 ## 引言
 
 本项目是一个基于ALTERA Cyclone IV E系列FPGA的ROM存储系统，专门用于LCD显示应用。该系统集成了ALTSYNCRAM IP核，实现了高效的图像数据存储和读取功能。项目采用模块化设计，包含时钟管理、显示驱动、图像处理和ROM存储等核心功能模块。
+
+**更新** 系统现已简化为仅依赖单一的CrazyBird.mif文件作为ROM初始化数据源，移除了对多个MIF文件的复杂依赖关系。
 
 该ROM存储系统的主要特点包括：
 - 支持多种图像格式（RGB888和RGB565）
@@ -58,10 +65,7 @@ LCD_DISPLAY[lcd_display]
 end
 subgraph "存储系统"
 PIC_ROM[pic_rom]
-PIC_ROM_BB[pic_rom_bb]
 CRAZY_BIRD[CrazyBird.mif]
-MIQI[miqi.mif]
-PICTURE1[picture1.mif]
 end
 LCD_ROM_PIC --> LCD_PLL
 LCD_ROM_PIC --> LCD_DRIVER
@@ -69,22 +73,20 @@ LCD_ROM_PIC --> LCD_DISPLAY
 LCD_DRIVER --> PIC_ROM
 LCD_DISPLAY --> PIC_ROM
 PIC_ROM --> CRAZY_BIRD
-PIC_ROM --> MIQI
-PIC_ROM --> PICTURE1
 ```
 
 **图表来源**
-- [lcd_rom_pic.v:1-59](file://lcd_rom_pic.v#L1-L59)
+- [lcd_rom_pic.v:1-67](file://lcd_rom_pic.v#L1-L67)
 - [lcd_pll.v:1-321](file://lcd_pll.v#L1-L321)
 - [lcd_driver.v:1-97](file://lcd_driver.v#L1-L97)
-- [lcd_display.v:1-199](file://lcd_display.v#L1-L199)
+- [lcd_display.v:1-296](file://lcd_display.v#L1-L296)
 - [pic_rom.v:1-165](file://pic_rom.v#L1-L165)
 
 **章节来源**
-- [lcd_rom_pic.v:1-59](file://lcd_rom_pic.v#L1-L59)
+- [lcd_rom_pic.v:1-67](file://lcd_rom_pic.v#L1-L67)
 - [lcd_pll.v:1-321](file://lcd_pll.v#L1-L321)
 - [lcd_driver.v:1-97](file://lcd_driver.v#L1-L97)
-- [lcd_display.v:1-199](file://lcd_display.v#L1-L199)
+- [lcd_display.v:1-296](file://lcd_display.v#L1-L296)
 - [pic_rom.v:1-165](file://pic_rom.v#L1-L165)
 
 ## 核心组件
@@ -105,11 +107,15 @@ ALTSYNCRAM是ALTERA提供的同步RAM/ROM存储器宏单元，本项目中配置
 - **初始化文件**: CrazyBird.mif
 - **文件格式**: MIF（Memory Initialization File）
 - **数据布局**: 按端口A布局，地址连续存储
+- **实际数据深度**: 25,600字（160×160像素图像）
+
+**更新** 移除了对miqi.mif、miqi1.mif、picture1.mif文件的依赖，系统现在仅使用CrazyBird.mif文件。
 
 **章节来源**
 - [pic_rom.v:85-99](file://pic_rom.v#L85-L99)
 - [pic_rom.v:134-149](file://pic_rom.v#L134-L149)
 - [pic_rom_bb.v:75-100](file://pic_rom_bb.v#L75-L100)
+- [CrazyBird.mif:4-7](file://CrazyBird.mif#L4-L7)
 
 ### 显示驱动模块
 
@@ -140,8 +146,8 @@ ALTSYNCRAM是ALTERA提供的同步RAM/ROM存储器宏单元，本项目中配置
 图像显示模块实现了动态图像控制和ROM数据读取：
 
 **图像规格：**
-- **图像尺寸**: 140×170像素
-- **总像素数**: 23,800像素
+- **图像尺寸**: 160×160像素
+- **总像素数**: 25,600像素
 - **图像数据格式**: RGB888（24位）
 - **存储格式**: 逐像素连续存储
 
@@ -151,8 +157,10 @@ ALTSYNCRAM是ALTERA提供的同步RAM/ROM存储器宏单元，本项目中配置
 - **垂直移动模式**: 上下往复移动130像素
 - **45度穿透模式**: 左上45度运动，边界穿透
 
+**更新** 图像尺寸已调整为160×160像素，对应25,600字的存储需求。
+
 **章节来源**
-- [lcd_display.v:10-19](file://lcd_display.v#L10-L19)
+- [lcd_display.v:16-22](file://lcd_display.v#L16-L22)
 - [lcd_display.v:164-174](file://lcd_display.v#L164-L174)
 
 ## 架构概览
@@ -204,7 +212,7 @@ class PicRom {
 +defparam init_file : "CrazyBird.mif"
 }
 class CrazyBirdMif {
-+parameter DEPTH : 23800
++parameter DEPTH : 25600
 +parameter WIDTH : 24
 +parameter ADDRESS_RADIX : UNS
 +parameter DATA_RADIX : HEX
@@ -248,7 +256,7 @@ VALID_ADDR --> END
 
 **章节来源**
 - [pic_rom.v:85-99](file://pic_rom.v#L85-L99)
-- [CrazyBird.mif:9-23812](file://CrazyBird.mif#L9-L23812)
+- [CrazyBird.mif:9-25612](file://CrazyBird.mif#L9-L25612)
 - [lcd_display.v:164-174](file://lcd_display.v#L164-L174)
 
 ### 时钟管理系统
@@ -320,10 +328,7 @@ LCD_DISPLAY[lcd_display]
 end
 subgraph "存储系统依赖"
 PIC_ROM[pic_rom]
-PIC_ROM_BB[pic_rom_bb]
 CRAZY_BIRD[CrazyBird.mif]
-MIQI[miqi.mif]
-PICTURE1[picture1.mif]
 ALTERA_MF
 end
 LCD_ROM_PIC --> LCD_PLL
@@ -332,12 +337,12 @@ LCD_ROM_PIC --> LCD_DISPLAY
 LCD_DRIVER --> PIC_ROM
 LCD_DISPLAY --> PIC_ROM
 PIC_ROM --> CRAZY_BIRD
-PIC_ROM --> MIQI
-PIC_ROM --> PICTURE1
 PIC_ROM --> ALTERA_MF
 LCD_PLL --> ALTERA_MF
 PIC_ROM --> ALTERA_MF
 ```
+
+**更新** 移除了对miqi.mif、miqi1.mif、picture1.mif文件的依赖关系，简化了存储系统的文件组织。
 
 **图表来源**
 - [pic_rom.v:11-13](file://pic_rom.v#L11-L13)
@@ -365,7 +370,7 @@ PIC_ROM --> ALTERA_MF
 
 **内存映射优化：**
 - 15位地址总线支持32K字存储
-- 实际图像仅使用23,800字，预留空间用于扩展
+- 实际图像仅使用25,600字，预留空间用于扩展
 - 连续地址布局提高缓存效率
 
 ### 时序优化策略
@@ -424,12 +429,13 @@ PIC_ROM --> ALTERA_MF
 
 ## 结论
 
-本ROM存储系统成功实现了基于ALTSYNCRAM IP核的高效图像存储和显示功能。系统具有以下优势：
+本ROM存储系统成功实现了基于ALTSYNCRAM IP核的高效图像存储和显示功能。系统经过简化后，具有以下优势：
 
 **技术优势：**
 - 基于成熟的ALTERA IP核，可靠性高
 - 模块化设计便于维护和扩展
 - 高效的存储器架构优化
+- 简化的文件组织结构
 
 **应用价值：**
 - 支持多种显示格式和分辨率
@@ -441,7 +447,9 @@ PIC_ROM --> ALTERA_MF
 - 实现动态图像切换功能
 - 优化内存使用效率
 
-该系统为LCD显示应用提供了一个完整、可靠的解决方案，具有良好的扩展性和实用性。
+**更新** 系统现已简化为单一CrazyBird.mif文件的配置，减少了维护复杂性和潜在的配置错误风险。
+
+该系统为LCD显示应用提供了一个完整、可靠且简化的解决方案，具有良好的扩展性和实用性。
 
 ## 附录
 
@@ -455,6 +463,8 @@ PIC_ROM --> ALTERA_MF
 | 像素时钟 | 33.3 MHz | LCD像素时钟 |
 | 分辨率 | 800×480 | 显示分辨率 |
 | 数据宽度 | 24位 | RGB888格式 |
+| 图像尺寸 | 160×160像素 | 实际图像大小 |
+| 存储深度 | 25,600字 | 实际使用容量 |
 
 ### 文件组织结构
 
@@ -469,13 +479,13 @@ SRC --> LCD_DRIVER_V[lcd_driver.v]
 SRC --> LCD_DISPLAY_V[lcd_display.v]
 SRC --> LCD_PLL_V[lcd_pll.v]
 MIF --> CRAZY_BIRD[CrazyBird.mif]
-MIF --> MIQI[miqi.mif]
-MIF --> PICTURE1[picture1.mif]
 QSF --> LCD_ROM_PIC_QSF[lcd_rom_pic.qsf]
 QSF --> LCD_ROM_PIC_TXT[lcd_rom_pic.txt]
 ```
 
+**更新** 移除了miqi.mif、miqi1.mif、picture1.mif文件的引用，文件组织结构已简化。
+
 **图表来源**
-- [lcd_rom_pic.v:1-59](file://lcd_rom_pic.v#L1-L59)
+- [lcd_rom_pic.v:1-67](file://lcd_rom_pic.v#L1-L67)
 - [CrazyBird.mif:1-800](file://CrazyBird.mif#L1-L800)
 - [lcd_rom_pic.qsf:39-97](file://lcd_rom_pic.qsf#L39-L97)
